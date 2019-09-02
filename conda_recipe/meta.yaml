@@ -27,7 +27,9 @@ requirements:
     - matplotlib
     - umap-learn
     - scikit-learn 
-    - mpld3
+    - keras
+    - prody
+    - xgboost
 
 test:
   imports:
