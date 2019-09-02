@@ -22,6 +22,7 @@ requirements:
   run:
     # Base dependencies
     - python 3
+    - numpy==1.16.2
     - tqdm
     - rdkit
     - matplotlib

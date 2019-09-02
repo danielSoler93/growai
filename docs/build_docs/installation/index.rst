@@ -6,7 +6,10 @@ From Conda (recommended)
 
 ::
 
- conda install -c NostrumBioDiscovery growai
+ conda create -c NostrumBioDiscovery -n grow_test python=3.7  growai
+ source activate grow_test
+ export SCHRODINGER=/opt/schrodinger2018-1/
+ python -m growai.gorw -h
 
 
 From PyPi
