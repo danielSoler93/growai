@@ -89,7 +89,8 @@
 <li class="toctree-l1 current"><a class="reference internal" href="../index.html">Getting Started</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../api_tutorial/index.html">From python API</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">From Command Line</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#ongoing">Ongoing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#growing-methodology">Growing methodology</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#growing-and-ranking-methodology-commercial-schrodinger-is-need-it">Growing and ranking methodology (commercial schrodinger is need it)</a></li>
 </ul>
 </li>
 </ul>
@@ -165,8 +166,24 @@
             
   <div class="section" id="from-command-line">
 <h1>From Command Line<a class="headerlink" href="#from-command-line" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="ongoing">
-<h2>Ongoing<a class="headerlink" href="#ongoing" title="Permalink to this headline">¶</a></h2>
+<p>First install the software, export SCHORDINGER env variable and download the example folder:</p>
+<ul class="simple">
+<li>conda install -c NostrumBioDiscovery -n growai python=3.7 growai</li>
+<li>export SCHRODINGER=/opt/schrodinger2018-1/</li>
+<li>git clone <a class="reference external" href="https://github.com/danielSoler93/growai.git">https://github.com/danielSoler93/growai.git</a></li>
+<li>cd growai/growai/examples/toluene</li>
+</ul>
+<div class="section" id="growing-methodology">
+<h2>Growing methodology<a class="headerlink" href="#growing-methodology" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>python -m growai.grow –pdb toluene.pdb –resname TOL –only_grow –grow_iterations 8</li>
+</ul>
+</div>
+<div class="section" id="growing-and-ranking-methodology-commercial-schrodinger-is-need-it">
+<h2>Growing and ranking methodology (commercial schrodinger is need it)<a class="headerlink" href="#growing-and-ranking-methodology-commercial-schrodinger-is-need-it" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>python -m growai.grow –pdb toluene.pdb –resname TOL –grow_iterations 8</li>
+</ul>
 </div>
 </div>
 
