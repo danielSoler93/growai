@@ -16,6 +16,8 @@ From PyPi
 
  pip install growai
 
+ conda install rdkit (or build it from source as it has no pip support)
+
  
 From Source Code
 ---------------------
