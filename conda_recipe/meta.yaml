@@ -1,0 +1,36 @@
+package:
+  name: growai
+  version: "1.0.0"
+
+about:
+  home: https://github.com/danielSoler93/growai
+  license: Apache
+  license_file: LICENSE
+  summary: Coupling active learning approaches with generative models to automatically generate and rank 1M compounds.
+
+source:
+  path: ../
+
+build:
+  script: python -m pip install . --no-deps -vv
+  number: 0
+
+requirements:
+  host:
+    - python 3
+
+  run:
+    # Base dependencies
+    - python 3
+    - tqdm
+    - rdkit
+    - matplotlib
+    - umap-learn
+    - scikit-learn 
+    - mpld3
+
+test:
+  imports:
+    - growai
+  requires:
+    - pytest
