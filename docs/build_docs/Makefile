@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = MSM_PELE
+SPHINXPROJ    = growai
 SOURCEDIR     = .
 BUILDDIR      = _build
 

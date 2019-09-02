@@ -3,22 +3,34 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Analogs Finder
+Growai
 ===========================================
 
-Analogs finder is a python based query-search engine for drug discovery.
-It allows the user to perform queries based on molecule
-similarity or substructure matching to retrieve similar analogs
-from your initial molecule. 
+Growai is a python based package to automatically generate
+and rank compounds from a seed molecule.
 
-Github : https://github.com/danielSoler93/analogs_finder
+Github : https://github.com/danielSoler93/growai
 
 
-Molecule query and its search result: 
+Seed compound, the desired molecule and the newly generated compounds.
 
-.. figure:: images/query_result.png
+.. figure:: images/growing_test.png
     :scale: 80%
     :align: center
+
+
+Active learning approach to rank the previously generated compounds
+
+.. figure:: images/activelearning_arch.png
+    :scale: 80%
+    :align: center
+
+The validation of the method
+
+.. figure:: images/alres.png
+    :scale: 80%
+    :align: center
+
 
 Documentation
 ===================

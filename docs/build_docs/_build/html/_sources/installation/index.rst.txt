@@ -6,7 +6,7 @@ From Conda (recommended)
 
 ::
 
- conda install -c NostrumBioDiscovery analogs_finder
+ conda install -c NostrumBioDiscovery growai
 
 
 From PyPi
@@ -14,7 +14,7 @@ From PyPi
 
 ::
 
- pip install analogs_finder
+ pip install growai
 
  
 From Source Code
@@ -22,9 +22,9 @@ From Source Code
 
 ::
 
- git clone https://github.com/danielSoler93/analogs_finder.git
+ git clone https://github.com/danielSoler93/growai.git
  
- cd analogs_finder
+ cd growai
 
  python setup.py install
 
