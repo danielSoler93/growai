@@ -3,7 +3,7 @@ import subprocess
 import growai.constants.constants as cs
 
 
-def  pdb_to_mae(pdb, schr=cs.SCHR, output=None):
+def  pdb_to_mae(pdb, schr=cs.SCHRODINGER, output=None):
     if not output:
         output = os.path.splitext(os.path.basename(pdb))[0]+".mae"
     pdbconvert = os.path.join(schr, "utilities/pdbconvert")
@@ -12,7 +12,7 @@ def  pdb_to_mae(pdb, schr=cs.SCHR, output=None):
     subprocess.call(command.split())
     return output
 
-def  sd_to_mae(sdf, schr=cs.SCHR, output=None):
+def  sd_to_mae(sdf, schr=cs.SCHRODINGER, output=None):
     if not output:
         output = os.path.splitext(os.path.basename(sdf))[0]+".mae"
     sdconvert = os.path.join(schr, "utilities/sdconvert")

@@ -28,11 +28,9 @@ from keras.layers import LSTM, Input, Flatten
 from keras.layers import Dropout,  BatchNormalization
 from keras.layers import Embedding, Bidirectional
 from keras.utils import to_categorical
-import analyse as an
 from keras.preprocessing.sequence import pad_sequences
 from tqdm import tqdm
 import subprocess
-import helpers as hp
 import xgboost as xgb
 import matplotlib.pyplot as plt
 import collections
@@ -43,7 +41,9 @@ import time
 import glob
 import argparse
 import numpy as np
-import glide as gl
+import growai.model.docking.glide as gl
+import growai.model.helpers.helpers as hp
+import growai.analysis as an
 import growai.constants.constants as cs
 
 # Deactive tnesorflow warnings
@@ -160,15 +160,15 @@ def pdb_to_sdf(ligand_pdb, schr=cs.SCHRODINGER, output=None):
     subprocess.call(command.split())
     return os.path.abspath(output)
 
-def grow_protocol(pdb, sdf, vocabulary, resname, max_len=20, iterations=8, grow=False, active_learning=True):
+def grow_protocol(pdb, sdf, vocabulary, resname, max_len=20, iterations=10, grow=True, rank=True):
     print("\nBuild growing model")
     print("===================\n")
     model = create_model()
     
     print("\nBuild initial molec")
     print("===================\n")
-    core_molecule = Chem.AddHs(Chem.SDMolSupplier(sdf).next())
-    core_smile = Chem.MolToSmiles(Chem.SDMolSupplier(sdf).next())
+    core_molecule = Chem.AddHs(next(Chem.SDMolSupplier(sdf)))
+    core_smile = Chem.MolToSmiles(next(Chem.SDMolSupplier(sdf)))
     core_smile_stripped = core_smile.strip("[HH].").strip("([H])")
     core_smile_pattern, n_growing_positions = identify_spots_to_grow(core_smile_stripped)
 
@@ -236,8 +236,8 @@ def grow_protocol(pdb, sdf, vocabulary, resname, max_len=20, iterations=8, grow=
                   molecules_threeD.append(m_h)
           final_smiles.extend(smiles_current_generation)
           smiles_current_generation = smiles_next_generation
-          print("{} fragments generated").format(number_of_total_fragments)
-          print("{} molecules generated").format(len(set(final_smiles)))
+          print("{} fragments generated".format(number_of_total_fragments))
+          print("{} molecules generated".format(len(set(final_smiles))))
 
     # Write sdf with fragments
     total_fragments_mols = [Chem.MolFromSmiles(smile.strip("!")) for smile in total_fragments]
@@ -247,7 +247,7 @@ def grow_protocol(pdb, sdf, vocabulary, resname, max_len=20, iterations=8, grow=
             m_h = Chem.AddHs(m)
         except ValueError: 
             continue
-    	AllChem.Compute2DCoords(m_h)
+        AllChem.Compute2DCoords(m_h)
         w.write(m_h)
 
     j = 0
@@ -255,223 +255,225 @@ def grow_protocol(pdb, sdf, vocabulary, resname, max_len=20, iterations=8, grow=
     folders = glob.glob("round*")
     #folders = glob.glob("round4")
 
-    print("\tExtract molecules of {} files".format(len(folders)))
-    for folder in folders:
-        sdf_file = os.path.join(folder, folder + ".sdf")
-        molecules.extend([m for m in tqdm(Chem.SDMolSupplier(sdf_file))])
-    fp_ref = FingerprintMols.FingerprintMol(molecules[0])
+    if rank:
 
-    print("\nCompute Similarity")
-    print("===================\n")
-    similarity = np.array([ DataStructs.FingerprintSimilarity(fp_ref, FingerprintMols.FingerprintMol(m)) if m else 10 for m in tqdm(molecules)])
-    molecules_idxs_sort_by_similarity = np.argsort(similarity).tolist()
-    similarity = similarity.tolist()
-    mol_ref = similarity[molecules_idxs_sort_by_similarity[0]]
+        print("\tExtract molecules of {} files".format(len(folders)))
+        for folder in folders:
+            sdf_file = os.path.join(folder, folder + ".sdf")
+            molecules.extend([m for m in tqdm(Chem.SDMolSupplier(sdf_file))])
+        fp_ref = FingerprintMols.FingerprintMol(molecules[0])
 
-    while True:
+        print("\nCompute Similarity")
+        print("===================\n")
+        similarity = np.array([ DataStructs.FingerprintSimilarity(fp_ref, FingerprintMols.FingerprintMol(m)) if m else 10 for m in tqdm(molecules)])
+        molecules_idxs_sort_by_similarity = np.argsort(similarity).tolist()
+        similarity = similarity.tolist()
+        mol_ref = similarity[molecules_idxs_sort_by_similarity[0]]
 
-        # Create Folder
-        if j > 100:
-            sys.exit(-1)
-        folder_name = "learning_{}".format(j)
-        if not os.path.exists(folder_name):
-            os.mkdir(folder_name)
-        
-        #Move inside Folder
-        with(hp.cd(folder_name)):
+        while True:
+
+            # Create Folder
+            if j > 100:
+                sys.exit(-1)
+            folder_name = "learning_{}".format(j)
+            if not os.path.exists(folder_name):
+                os.mkdir(folder_name)
             
-            # If Predicting docking score (once learned)
-            if use_docking_model:
-                features, features_test = retrieve_features(features, pdb, molecules, fragments, core_molecule, 
-                    resname,  n_growing_positions, bonded_atom, labels=None)
-                final_features = features_test.copy()
-                for i, models_round in enumerate(models):
-                    if i == len(models)-1:
-                        intermidiate_features = features_test.copy()
-                        model1, model2, model3, model4, model_final = models_round 
-                        pred1 = model1.predict(scaler.fit_transform(features_test))
-                        pred2 = model2.predict(scaler.fit_transform(features_test))
-                        pred3 = model3.predict(scaler.fit_transform(features_test))
-                        pred4 = model4.predict(scaler.fit_transform(features_test))
-                	intermidiate_features["SVM".format(i)] = pred1
-                	intermidiate_features["linear".format(i)] = pred2
-                	intermidiate_features["KN".format(i)] = pred3
-                	intermidiate_features["GP".format(i)] = pred4
-                        final_features["final_model_{}".format(i)] = model_final.predict(scaler.fit_transform(intermidiate_features))
+            #Move inside Folder
+            with(hp.cd(folder_name)):
+                
+                # If Predicting docking score (once learned)
+                if use_docking_model:
+                    features, features_test = retrieve_features(features, pdb, molecules, fragments, core_molecule, 
+                        resname,  n_growing_positions, bonded_atom, labels=None)
+                    final_features = features_test.copy()
+                    for i, models_round in enumerate(models):
+                        if i == len(models)-1:
+                            intermidiate_features = features_test.copy()
+                            model1, model2, model3, model4, model_final = models_round 
+                            pred1 = model1.predict(scaler.fit_transform(features_test))
+                            pred2 = model2.predict(scaler.fit_transform(features_test))
+                            pred3 = model3.predict(scaler.fit_transform(features_test))
+                            pred4 = model4.predict(scaler.fit_transform(features_test))
+                            intermidiate_features["SVM".format(i)] = pred1
+                            intermidiate_features["linear".format(i)] = pred2
+                            intermidiate_features["KN".format(i)] = pred3
+                            intermidiate_features["GP".format(i)] = pred4
+                            final_features["final_model_{}".format(i)] = model_final.predict(scaler.fit_transform(intermidiate_features))
+                        else:
+                            final_features["final_model_{}".format(i)] = [0] * features_test.shape[0]
+                    docking_score = model_to_docking.predict(scaler.fit_transform(final_features))
+                    print(docking_score)
+                    if os.path.exists(data_file):
+                        # Score
+                        data_file = an.analyze(glob.glob(output_docking_mae), filter=["Score"])
+                        test_labels = retrieve_labels(data_file)
+                        value = median_absolute_error(test_labels, docking_score)
+                        slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(test_labels, docking_score)
+                        print("Score:", value)
+                        print("r2", r_value)
+                        scores.append(value)
+                        rsquares.append(r_value)
+                        steps.append(j)
+                        # Plot
+                        fig, ax = plt.subplots()
+                        ax.plot(steps, rsquares)
+                        ax.plot(steps, scores)
+                        fig.savefig("rsquare_scores.png")
+                        # Plot
+                        fig, ax = plt.subplots()
+                        ax.scatter(test_labels, docking_score)
+                        fig.savefig("result.png")
+                   
+                # If learning
+                else:
+                    if cold_start:
+                        # Elect structs to dock
+                        number_of_structs = 1000
+                        #number_of_structs = 20
+                        indxs_to_pick = np.round(np.linspace(0, len(molecules_idxs_sort_by_similarity) - 1, number_of_structs)).astype(int)
+                        indxs_to_pick = sorted(indxs_to_pick, reverse=True)
+                        indxs_mol = [molecules_idxs_sort_by_similarity[idx] for idx in indxs_to_pick]
+
+                        molecules_to_dock = []
+                        for i, (idx, idx_remove) in enumerate(zip(indxs_mol, indxs_to_pick)):
+                            if similarity[idx] <= 1:
+                                #Save molec
+                                m = molecules[idx]
+                                m.SetProp("Similarity", str(similarity[idx]))
+                                molecules_to_dock.append(molecules[idx])
+                                #Remove molecules from eligible indexes
+                                molecules_idxs_sort_by_similarity.pop(idx_remove)
+                            else:
+                                #If molec is wrong remove it from eligible
+                                molecules_idxs_sort_by_similarity.pop(idx_remove)
+                        cold_start = False
                     else:
-                        final_features["final_model_{}".format(i)] = [0] * features_test.shape[0]
-                docking_score = model_to_docking.predict(scaler.fit_transform(final_features))
-                print(docking_score)
-                if os.path.exists(data_file):
-                    # Score
-                    data_file = an.analyze(glob.glob(output_docking_mae), filter=["Score"])
-                    test_labels = retrieve_labels(data_file)
-                    value = median_absolute_error(test_labels, docking_score)
-                    slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(test_labels, docking_score)
+                        new_molecules = []
+                        for k, (m_ref, result) in tqdm(enumerate(zip(molecules_to_dock, results))):
+                            limit_similar_mols = 15
+                            number_of_similar_mols = 0
+                            sim_ref = float(m_ref.GetProp("Similarity"))
+                            if result > 1.5: 
+                                #If the result differs in a docking unit choose similar molecules
+                                idxs = np.argsort(np.abs(np.array(similarity) - sim_ref))
+                                for i in idxs:
+                                    if number_of_similar_mols > limit_similar_mols:
+                                        break 
+                                    if i in molecules_idxs_sort_by_similarity and molecules[i] and molecules[i] not in new_molecules:
+                                        chosen_mol = molecules[i]
+                                        chosen_mol.SetProp("Similarity", str(similarity[i]))
+                                        new_molecules.append(chosen_mol)
+                                        molecules_idxs_sort_by_similarity.remove(i)
+                                        number_of_similar_mols += 1
+                        molecules_to_dock = new_molecules
+                        print("Number of Chosen Molecules", len(molecules_to_dock))
+                                   
+
+                    #Write input for docking
+                    sdf = "structs_to_dock_{}.sdf".format(i)                
+                    w = Chem.SDWriter(sdf)
+                    w.SetProps([""])
+                    for m in molecules_to_dock: w.write(m)
+                    
+                    #Dock
+                    print("\nDocking")
+                    print("===========\n")
+                    output_docking_mae = "input__*__dock_lib.maegz" 
+                    output_docking = "input__*__dock_subjob_poses.zip"
+                    if not glob.glob(output_docking):
+                        dock(pdb, sdf)
+                    while not glob.glob(output_docking):
+                        time.sleep(60)
+
+                    print("\nFeature Extraction")
+                    print("=====================\n")
+                    data_file = an.analyze(glob.glob(output_docking_mae), filter=["Score"]) 
+                    molecules_to_dock, test_labels = retrieve_labels(molecules_to_dock, data_file)
+                    #test_labels = [-0, -1, -2, -3, -4, -0, -1, -2, -3, -4,-0, -1, -2, -3, -4,-0, -1, -2, -3, -4]
+                    # Retrieve other info from final moleculs
+                    fragments = [ m.GetProp("fragment") for m in molecules_to_dock ]
+                    bonded_atom = [ m.GetProp("bonded_atom") for m in molecules_to_dock ]
+
+                    #Build features
+                    features, features_test, test_labels = retrieve_features(features, pdb, molecules_to_dock, fragments, core_molecule,
+                        resname, n_growing_positions, bonded_atom, core_smile_pattern, labels=test_labels)
+                    labels.extend(test_labels)
+
+                    print("\nTrain Model")
+                    print("==============\n")
+                    print("Features: {} Labels: {}".format(features.shape, len(labels))) 
+                    scaler = StandardScaler()
+                    #grid = GridSearchCV(CLF, param_grid, refit=True, verbose=0)
+                    #grid.fit(features, labels)
+                    #print("Best Parameters")
+                    #print(grid.best_params_)
+                    
+                    #Stack Models inside round
+                    prediction1 = cross_val_predict(CLF1, scaler.fit_transform(features), labels, cv=15)
+                    prediction2 = cross_val_predict(CLF2, scaler.fit_transform(features), labels, cv=15)
+                    prediction3 = cross_val_predict(CLF3, scaler.fit_transform(features), labels, cv=15)
+                    prediction4 = cross_val_predict(CLF4, scaler.fit_transform(features), labels, cv=15)
+                    new_features = features.copy()
+                    new_features["SVM"] = prediction1
+                    new_features["linear"] = prediction2
+                    new_features["KN"] = prediction3
+                    new_features["GP"] = prediction4
+
+                    
+                    #Stack Models outside round
+                    prediction_stacked = cross_val_predict(CLF5, scaler.fit_transform(new_features), labels, cv=15)
+                    stack_features = features.copy() if not stack_models else stack_features
+                    stack_features = pds.concat([stack_features, pds.DataFrame({"round_{}_svm".format(i):prediction_stacked})], axis=1) 
+                    #stack_features = pds.concat([stack_features, pds.DataFrame({"round_{}_svm".format(i):prediction1, 
+                    #     "round_{}_linear".format(i):prediction2, "round_{}_KN".format(i):prediction3,
+                    #     "round_{}_GP".format(i): prediction4 } )], axis=1)
+                    stack_models = True
+
+                    #Final prediction:
+                    from sklearn.impute import SimpleImputer
+                    imputer = SimpleImputer(strategy="constant")
+                    preprocess_data = scaler.fit_transform(imputer.fit_transform(stack_features))
+                    prediction = cross_val_predict(CLF6, preprocess_data, labels, cv=15)
+                    
+                    #Score
+                    value = median_absolute_error(np.ravel(labels), np.ravel(prediction))
+                    slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(np.ravel(labels), prediction)
                     print("Score:", value)
                     print("r2", r_value)
                     scores.append(value)
                     rsquares.append(r_value)
                     steps.append(j)
-                    # Plot
+
+                    #Plot
                     fig, ax = plt.subplots()
                     ax.plot(steps, rsquares)
                     ax.plot(steps, scores)
                     fig.savefig("rsquare_scores.png")
-                    # Plot
+
                     fig, ax = plt.subplots()
-                    ax.scatter(test_labels, docking_score)
+                    ax.scatter(labels, prediction)
                     fig.savefig("result.png")
-               
-            # If learning
-            elif active_learning:
-                if cold_start:
-                    # Elect structs to dock
-                    number_of_structs = 1000
-                    #number_of_structs = 20
-                    indxs_to_pick = np.round(np.linspace(0, len(molecules_idxs_sort_by_similarity) - 1, number_of_structs)).astype(int)
-                    indxs_to_pick = sorted(indxs_to_pick, reverse=True)
-                    indxs_mol = [molecules_idxs_sort_by_similarity[idx] for idx in indxs_to_pick]
 
-                    molecules_to_dock = []
-                    for i, (idx, idx_remove) in enumerate(zip(indxs_mol, indxs_to_pick)):
-                        if similarity[idx] <= 1:
-                            #Save molec
-                            m = molecules[idx]
-                            m.SetProp("Similarity", str(similarity[idx]))
-                            molecules_to_dock.append(molecules[idx])
-                            #Remove molecules from eligible indexes
-                            molecules_idxs_sort_by_similarity.pop(idx_remove)
-                        else:
-                            #If molec is wrong remove it from eligible
-                            molecules_idxs_sort_by_similarity.pop(idx_remove)
-                    cold_start = False
-                else:
-                    new_molecules = []
-                    for k, (m_ref, result) in tqdm(enumerate(zip(molecules_to_dock, results))):
-                        limit_similar_mols = 15
-                        number_of_similar_mols = 0
-                        sim_ref = float(m_ref.GetProp("Similarity"))
-                        if result > 1.5: 
-                            #If the result differs in a docking unit choose similar molecules
-                            idxs = np.argsort(np.abs(np.array(similarity) - sim_ref))
-                            for i in idxs:
-                                if number_of_similar_mols > limit_similar_mols:
-                                    break 
-                                if i in molecules_idxs_sort_by_similarity and molecules[i] and molecules[i] not in new_molecules:
-                                    chosen_mol = molecules[i]
-                                    chosen_mol.SetProp("Similarity", str(similarity[i]))
-                                    new_molecules.append(chosen_mol)
-                                    molecules_idxs_sort_by_similarity.remove(i)
-                                    number_of_similar_mols += 1
-                    molecules_to_dock = new_molecules
-                    print("Number of Chosen Molecules", len(molecules_to_dock))
-                               
+                    #Get results
+                    results = np.absolute(np.ravel(prediction) - np.ravel(np.array(labels)))
+                    
+                    
 
-                #Write input for docking
-                sdf = "structs_to_dock_{}.sdf".format(i)                
-                w = Chem.SDWriter(sdf)
-                w.SetProps([""])
-                for m in molecules_to_dock: w.write(m)
-                
-                #Dock
-                print("\nDocking")
-                print("===========\n")
-                output_docking_mae = "input__*__dock_lib.maegz" 
-                output_docking = "input__*__dock_subjob_poses.zip"
-                if not glob.glob(output_docking):
-                    dock(pdb, sdf)
-                while not glob.glob(output_docking):
-                    time.sleep(60)
-
-                print("\nFeature Extraction")
-                print("=====================\n")
-                data_file = an.analyze(glob.glob(output_docking_mae), filter=["Score"]) 
-                molecules_to_dock, test_labels = retrieve_labels(molecules_to_dock, data_file)
-                #test_labels = [-0, -1, -2, -3, -4, -0, -1, -2, -3, -4,-0, -1, -2, -3, -4,-0, -1, -2, -3, -4]
-                # Retrieve other info from final moleculs
-                fragments = [ m.GetProp("fragment") for m in molecules_to_dock ]
-                bonded_atom = [ m.GetProp("bonded_atom") for m in molecules_to_dock ]
-
-                #Build features
-                features, features_test, test_labels = retrieve_features(features, pdb, molecules_to_dock, fragments, core_molecule,
-                    resname, n_growing_positions, bonded_atom, core_smile_pattern, labels=test_labels)
-                labels.extend(test_labels)
-
-                print("\nTrain Model")
-                print("==============\n")
-                print("Features: {} Labels: {}".format(features.shape, len(labels))) 
-                scaler = StandardScaler()
-                #grid = GridSearchCV(CLF, param_grid, refit=True, verbose=0)
-                #grid.fit(features, labels)
-                #print("Best Parameters")
-                #print(grid.best_params_)
-                
-                #Stack Models inside round
-                prediction1 = cross_val_predict(CLF1, scaler.fit_transform(features), labels, cv=15)
-                prediction2 = cross_val_predict(CLF2, scaler.fit_transform(features), labels, cv=15)
-                prediction3 = cross_val_predict(CLF3, scaler.fit_transform(features), labels, cv=15)
-                prediction4 = cross_val_predict(CLF4, scaler.fit_transform(features), labels, cv=15)
-                new_features = features.copy()
-                new_features["SVM"] = prediction1
-                new_features["linear"] = prediction2
-                new_features["KN"] = prediction3
-                new_features["GP"] = prediction4
-
-                
-                #Stack Models outside round
-                prediction_stacked = cross_val_predict(CLF5, scaler.fit_transform(new_features), labels, cv=15)
-                stack_features = features.copy() if not stack_models else stack_features
-                stack_features = pds.concat([stack_features, pds.DataFrame({"round_{}_svm".format(i):prediction_stacked})], axis=1) 
-                #stack_features = pds.concat([stack_features, pds.DataFrame({"round_{}_svm".format(i):prediction1, 
-                #     "round_{}_linear".format(i):prediction2, "round_{}_KN".format(i):prediction3,
-                #     "round_{}_GP".format(i): prediction4 } )], axis=1)
-                stack_models = True
-
-                #Final prediction:
-                from sklearn.impute import SimpleImputer
-                imputer = SimpleImputer(strategy="constant")
-                preprocess_data = scaler.fit_transform(imputer.fit_transform(stack_features))
-                prediction = cross_val_predict(CLF6, preprocess_data, labels, cv=15)
-                
-                #Score
-                value = median_absolute_error(np.ravel(labels), np.ravel(prediction))
-                slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(np.ravel(labels), prediction)
-                print("Score:", value)
-                print("r2", r_value)
-                scores.append(value)
-                rsquares.append(r_value)
-                steps.append(j)
-
-                #Plot
-                fig, ax = plt.subplots()
-                ax.plot(steps, rsquares)
-                ax.plot(steps, scores)
-                fig.savefig("rsquare_scores.png")
-
-                fig, ax = plt.subplots()
-                ax.scatter(labels, prediction)
-                fig.savefig("result.png")
-
-                #Get results
-                results = np.absolute(np.ravel(prediction) - np.ravel(np.array(labels)))
-                
-                
-
-                #Reach convergenge
-                model1 = CLF1.fit(scaler.fit_transform(features), labels)
-                model2 = CLF2.fit(scaler.fit_transform(features), labels)
-                model3 = CLF3.fit(scaler.fit_transform(features), labels)
-                model4 = CLF4.fit(scaler.fit_transform(features), labels)
-                model_stacked = CLF5.fit(scaler.fit_transform(new_features), labels)
-                models.append([model1, model2, model3, model4, model_stacked])
-                previous_score = value
-                if r_value > 0.60:
-                     preprocess_data = scaler.fit_transform(imputer.fit_transform(stack_features))
-                     model_to_docking = CLF6.fit(scaler.fit_transform(preprocess_data), labels)
-                     use_docking_model = True
-            j+=1
-    
+                    #Reach convergenge
+                    model1 = CLF1.fit(scaler.fit_transform(features), labels)
+                    model2 = CLF2.fit(scaler.fit_transform(features), labels)
+                    model3 = CLF3.fit(scaler.fit_transform(features), labels)
+                    model4 = CLF4.fit(scaler.fit_transform(features), labels)
+                    model_stacked = CLF5.fit(scaler.fit_transform(new_features), labels)
+                    models.append([model1, model2, model3, model4, model_stacked])
+                    previous_score = value
+                    if r_value > 0.60:
+                         preprocess_data = scaler.fit_transform(imputer.fit_transform(stack_features))
+                         model_to_docking = CLF6.fit(scaler.fit_transform(preprocess_data), labels)
+                         use_docking_model = True
+                j+=1
+        
     
 def retrieve_features(df, Complex, molecules_3D, fragments, core, resname, positions_to_grow, bonded_atom, core_smile_pattern, labels=None, save=True):
 
@@ -621,7 +623,7 @@ def grow_molecule(smiles, vocabulary,  model, max_len=25, vocab_size=13):
     numerical_dataset = pad_sequences([numerical_dataset], maxlen=max_len)
     X_pred = np.array(numerical_dataset)
     X_pred_trans = to_categorical(X_pred, num_classes=vocab_size)
-    valueToFind = model.predict(X_pred_trans)
+    valueToFind = model.predict(X_pred_trans.reshape(1, max_len, vocab_size))
     carac_index = np.argsort(valueToFind)[0][-4:]
     new_smiles = []
     for carac in carac_index:
@@ -671,19 +673,37 @@ def create_model(hidden_size = 800, dropout=0.2, batch_norm=1, lr=0.001, init_mo
 
   opt = RMSprop(lr=lr, clipnorm=1)
   model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
-  model.load_weights('model/weights/final_subset_cpu.hdf5')
+  model.load_weights(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'model/weights/final_subset_cpu.hdf5'))
   print(model.summary())
   return model 
   
 def parse_args(parser):
     parser.add_argument('--pdb',  type=str, help='Complex pdb of receptor + core to grow on')
     parser.add_argument('--resname', type=str, help='resname of the core')
+    parser.add_argument('--only_grow', action="store_true", help='Perform only growin')
+    parser.add_argument('--only_rank', action="store_true", help='Perform only ranking')
+    parser.add_argument('--grow_iterations', type=int, help='Growing iteration (Same as maximum number of grown atoms)', default=10)
+
+def main(pdb, resname, only_grow=True, only_rank=True, iterations=10):
+    pdb = os.path.abspath(pdb)
+    ligand_pdb, receptor_pdb = split_complex(pdb, resname)
+    ligand_sdf = pdb_to_sdf(ligand_pdb)
+    if only_grow:
+        grow_protocol(pdb, ligand_sdf, VOC, resname, grow=True, rank=False, iterations=iterations)
+    elif only_rank:
+        grow_protocol(pdb, ligand_sdf, VOC, resname, grow=False, rank=True, iterations=iterations)
+    else:
+        grow_protocol(pdb, ligand_sdf, VOC, resname, grow=True, rank=True, iterations=iterations)
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='GrowingAI')
     parse_args(parser)
     args = parser.parse_args()
-    pdb = os.path.abspath(args.pdb)
-    ligand_pdb, receptor_pdb = split_complex(pdb, args.resname)
-    ligand_sdf = pdb_to_sdf(ligand_pdb)
-    grow_protocol(pdb, ligand_sdf, VOC, args.resname)
+    
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='GrowingAI')
+    parse_args(parser)
+    args = parser.parse_args()
+    main(args.pdb, args.resname, args.only_grow, args.only_rank, args.grow_iterations)
