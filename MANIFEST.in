@@ -1,1 +1,1 @@
-include growai/model/weights/*
+include growai/model/weights/final_subset_cpu.hdf5

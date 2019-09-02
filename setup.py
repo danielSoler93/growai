@@ -8,6 +8,7 @@ setuptools.setup(name='growai',
       author='Daniel Soler',
       author_email='daniel.soler@nostrumbiodiscovery.com',
       install_requires=["tqdm", ],
+      include_package_data=True, 
       packages=setuptools.find_packages(),
       classifiers=[
        "Programming Language :: Python :: 3",
