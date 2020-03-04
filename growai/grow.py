@@ -31,7 +31,6 @@ from keras.utils import to_categorical
 from keras.preprocessing.sequence import pad_sequences
 from tqdm import tqdm
 import subprocess
-import xgboost as xgb
 import matplotlib.pyplot as plt
 import collections
 import Bio.PDB
@@ -53,7 +52,6 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 pd.confProDy(verbosity="none")
 
 # Disable Rdkit stdout
-tf.logging.set_verbosity(tf.logging.ERROR)
 rdBase.DisableLog('rdApp.error')
 
 #Harcode RDKIT Data
@@ -70,20 +68,6 @@ except IOError:
     
 
 # Classifiersi:
-
-#####IMPORTANCE FEATURE MODEL
-boost = xgb.XGBClassifier(
-learning_rate=0.001,
-n_estimators=1000,
-max_depth=6,
-min_child_weight=6,
-gamma=0,
-subsample=0.8,
-colsample_bytree=0.8,
-objective= 'binary:logistic',
-nthread=4,
-scale_pos_weight=1,
-seed=27)
 
 ###FIRST MODEL TO STACK####
 from sklearn.svm import SVR
