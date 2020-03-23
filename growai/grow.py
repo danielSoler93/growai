@@ -43,7 +43,6 @@ import numpy as np
 import growai.model.docking.glide as gl
 import growai.model.helpers.helpers as hp
 import growai.analysis as an
-import growai.constants.constants as cs
 
 # Deactive tnesorflow warnings
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -55,7 +54,8 @@ pd.confProDy(verbosity="none")
 rdBase.DisableLog('rdApp.error')
 
 #Harcode RDKIT Data
-RDKIT=os.path.join(cs.SCHRODINGER, "mmshare-v*/data/RDKit/Data/")
+#RDKIT=os.path.join(cs.SCHRODINGER, "mmshare-v*/data/RDKit/Data/")
+RDKIT=""
 
 #Print out Error if RDKIT not recognize
 try:
@@ -136,12 +136,15 @@ def split_complex(pdb, resname, output_ligand=None, output_rec=None):
         fout.write("".join(receptor))
     return os.path.abspath(output_ligand), os.path.abspath(output_rec)
 
-def pdb_to_sdf(ligand_pdb, schr=cs.SCHRODINGER, output=None):
-    babel_loc = os.path.join(schr, "utilities/babel")
+def pdb_to_sdf(ligand_pdb, schr="", output=None):
+    mol = Chem.rdmolfiles.MolFromPDBFile(ligand_pdb, removeHs=False)
     if not output:
         output = os.path.splitext(ligand_pdb)[0] + ".sdf" 
-    command = "{} -ipdb {} -osdf {}".format(babel_loc, ligand_pdb,  output)
-    subprocess.call(command.split())
+    w = Chem.SDWriter(output)
+    w.write(mol)
+    #babel_loc = os.path.join(schr, "utilities/babel")
+    #command = "{} -ipdb {} -osdf {}".format(babel_loc, ligand_pdb,  output)
+    #subprocess.call(command.split())
     return os.path.abspath(output)
 
 def grow_protocol(pdb, sdf, vocabulary, resname, max_len=20, iterations=10, grow=True, rank=True):
