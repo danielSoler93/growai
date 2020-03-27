@@ -33,7 +33,6 @@ from tqdm import tqdm
 import subprocess
 import matplotlib.pyplot as plt
 import collections
-import Bio.PDB
 import pandas as pds
 import prody as pd
 import time

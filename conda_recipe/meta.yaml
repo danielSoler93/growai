@@ -1,3 +1,4 @@
+#conda install -c conda-forge -c nostrumbiodiscovery growai
 package:
   name: growai
   version: "1.0.0"
@@ -21,16 +22,10 @@ requirements:
 
   run:
     # Base dependencies
-    - python 3
-    - numpy==1.16.2
-    - tqdm
+    - tensorflow
     - rdkit
     - matplotlib
-    - umap-learn
-    - scikit-learn 
-    - keras
     - prody
-    - xgboost
 
 test:
   imports:
